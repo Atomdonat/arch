@@ -155,16 +155,11 @@
 	# Allow traffic from GSVM to WG-Client-G
 	sudo iptables -A FORWARD -s 10.0.30.0/24 -p tcp --dport 80:443 -d 10.0.60.3 -j ACCEPT
 	```
+### make iptables config permanent
+- https://askubuntu.com/questions/311053/how-to-make-ip-forwarding-permanent
+
 ## ToDo
 - NAT & Masquerade with DNAT **or** Forwarding
 	1. Scenario
-		- NAT: VPS <-> WGCF, VPS <-> WGCG
+		- NAT: Internet <-> VPS, VPS <-> WGCF, VPS <-> WGCG
 		- Forward: WGCF <-> VMs, WGCG <-> VMs
-	2. Scenario
-		- only NAT, no Forward
-	3. Scenario
-		- only Forward, no NAT
-	5. Scenario
-		- 
-	6. Scenario
-		- 
