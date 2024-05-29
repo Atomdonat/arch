@@ -1,7 +1,15 @@
+![Network Layout](./Networklayout_detailed.svg "Network Layout")
 ## pre-configuration
 - install iptables: `sudo apt install iptables iutils-ping`
 - enable IP-forwarding: `echo 1 > /proc/sys/net/ipv4/ip_forward`
 - get current config: `iptables -filter -L`
+
+### Reverse Proxy
+| Public IP/Ports          | <-> | I/F  | local IP  | I/F | <-> | I/F | local IP  | I/F     | <-> | I/F | local IP        |
+|--------------------------|:---:|------|-----------|-----|:---:|-----|-----------|---------|:---:|-----|-----------------|
+| 152.89.105.252:9000-9099 | <-> | ens3 | 10.0.20.1 | wg0 | <-> | wg0 | 10.0.20.2 | enp6s18 | <-> | ??? | 10.0.40.XXX:YYY |
+| 152.89.105.252:9100-9199 | <-> | ens3 | 10.0.20.1 | wg0 | <-> | wg0 | 10.0.20.3 | enp6s18 | <-> | ??? | 10.0.30.XXX:YYY |
+
 
 ### Wireguard
 #### Server on VPS:
@@ -77,42 +85,49 @@ peer: 0wXbJyU3Sqf2tMk0qZsnwggwHjv8EHm+q/zKaQAOzEY=
  
 ### Routing Tables:
 #### VPS (on VM level):
-| Service   | Source CN   | SOURCE_IP      | Destination CN | DESTINATION_IP | PROTOCOL | S_PORT | D_PORT | Chain       |
-| ----------| ----------- | -------------- | -------------- | -------------- | -------- | ------ | ------ | ----------- |
-| MGMT      | VPS         |                | MGMT           | 0.0.0.0/0      | TCP      | 22     | 22     | OUTPUT      |
-| Webserver | VPS         |                | User           | 0.0.0.0/0      | TCP      | 80     |        | OUTPUT      |
-| Webserver | VPS         |                | User           | 0.0.0.0/0      | TCP      | 443    |        | OUTPUT      |
-| VPN       | VPS         |                | User           | 0.0.0.0/0      | UDP      | 51820  |        | OUTPUT      |
-| DNS       | VPS         |                | CF-DNS         | 8.8.8.8        | UDP      | 53     |        | OUTPUT      |
-| VPN       | VPS         |                | WG-Client-F    | 10.0.20.2      | UDP      | 51820  | 51820  | POSTROUTING |
-| VPN       | VPS         |                | WG-Client-G    | 10.0.20.3      | UDP      | 51820  | 51820  | POSTROUTING |
-| MGMT      | MGMT        | 0.0.0.0/0      | VPS            |                | TCP      | 22     | 22     | INPUT       |
-| Webserver | User        | 0.0.0.0/0      | VPS            |                | TCP      |        | 80     | INPUT       |
-| Webserver | User        | 0.0.0.0/0      | VPS            |                | TCP      |        | 443    | INPUT       |
-| VPN       | User        | 0.0.0.0/0      | VPS            |                | UDP      |        | 51820  | INPUT       |
-| DNS       | CF-DNS      | 8.8.8.8        | VPS            |                | UDP      |        | 53     | INPUT       |
-| VPN       | WG-Client-F | 10.0.20.2      | VPS            |                | UDP      | 51820  | 51820  | POSTROUTING |
-| VPN       | WG-Client-G | 10.0.20.3      | VPS            |                | UDP      | 51820  | 51820  | POSTROUTING |
+| Service   | Source CN   | S_IF | SOURCE_IP | Destination CN | DESTINATION_IP | D_IF | PROTOCOL | S_PORT | D_PORT | Chain       |
+|-----------|-------------|------|-----------|----------------|----------------|------|----------|--------|--------|-------------|
+| MGMT      | VPS         | ens3 |           | MGMT           | 0.0.0.0/0      | ens3 | TCP      | 22     | 22     | OUTPUT      |
+| Webserver | VPS         | ens3 |           | User           | 0.0.0.0/0      | ens3 | TCP      | 80     |        | OUTPUT      |
+| Webserver | VPS         | ens3 |           | User           | 0.0.0.0/0      | ens3 | TCP      | 443    |        | OUTPUT      |
+| DNS       | VPS         | ens3 |           | CF-DNS         | 8.8.8.8        | ens3 | UDP      | 53     |        | OUTPUT      |
+| VPN       | VPS         | wg0  |           | User           | 0.0.0.0/0      | ens3 | UDP      | 51820  |        | OUTPUT      |
+| VPN       | VPS         | wg0  |           | WG-Client-F    | 10.0.20.2      | wg0  | UDP      | 51820  | 51820  | POSTROUTING |
+| VPN       | VPS         | wg0  |           | WG-Client-G    | 10.0.20.3      | wg0  | UDP      | 51820  | 51820  | POSTROUTING |
+| MGMT      | MGMT        | ens3 | 0.0.0.0/0 | VPS            |                | ens3 | TCP      | 22     | 22     | INPUT       |
+| Webserver | User        | ens3 | 0.0.0.0/0 | VPS            |                | ens3 | TCP      |        | 80     | INPUT       |
+| Webserver | User        | ens3 | 0.0.0.0/0 | VPS            |                | ens3 | TCP      |        | 443    | INPUT       |
+| DNS       | CF-DNS      | ens3 | 8.8.8.8   | VPS            |                | ens3 | UDP      |        | 53     | INPUT       |
+| VPN       | User        | ens3 | 0.0.0.0/0 | VPS            |                | wg0  | UDP      |        | 51820  | INPUT       |
+| VPN       | WG-Client-F | wg0  | 10.0.20.2 | VPS            |                | wg0  | UDP      | 51820  | 51820  | POSTROUTING |
+| VPN       | WG-Client-G | wg0  | 10.0.20.3 | VPS            |                | wg0  | UDP      | 51820  | 51820  | POSTROUTING |
+
 
 #### Wireguard Client on Fileserver (on VM level): 
-| Service | Source CN   | SOURCE_IP      | Destination CN | DESTINATION_IP | PROTOCOL | S_PORT | D_PORT | Chain       |
-| --------| ----------- | -------------- | -------------- | -------------- | -------- | ------ | ------ | ----------- |
-| VPN     | WG-Client-F |                | VPS            | 152.89.105.252 | UDP      | 51820  | 51820  | POSTROUTING |
-| VPN     | WG-Client-F |                | FSVM           | 10.0.40.0/24   | TCP      |        |        | OUTPUT      |
-| MGMT    | WG-Client-F |                | MGMT           | 10.0.1.0/24    | TCP      |        |        | OUTPUT      |
-| VPN     | VPS         | 152.89.105.252 | WG-Client-F    |                | UDP      | 51820  | 51820  | POSTROUTING |
-| VPN     | FSVM        | 10.0.40.0/24   | WG-Client-F    |                | TCP      |        |        | INPUT       |
-| MGMT    | MGMT        | 10.0.1.0/24    | WG-Client-F    |                | TCP      |        |        | INPUT       |
+| Service | Source CN   | S_IF    | SOURCE_IP      | Destination CN | DESTINATION_IP | D_IF    | PROTOCOL | S_PORT | D_PORT | Chain       |
+| --------| ----------- |---------| -------------- | -------------- | -------------- |---------| -------- | ------ | ------ | ----------- |
+| VPN     | WG-Client-F | wg0     |                | VPS            | 152.89.105.252 | wg0     | UDP      | 51820  | 51820  | POSTROUTING |
+| VPN     | WG-Client-F | wg0     |                | FSVM           | 10.0.40.0/24   | enp6s18 | TCP      |        |        | FORWARD     |
+| MGMT    | WG-Client-F | enp6s18 |                | MGMT           | 10.0.1.0/24    | enp6s18 | TCP      |        |        | OUTPUT      |
+| VPN     | VPS         | wg0     | 152.89.105.252 | WG-Client-F    |                | wg0     | UDP      | 51820  | 51820  | POSTROUTING |
+| VPN     | FSVM        | enp6s18 | 10.0.40.0/24   | WG-Client-F    |                | wg0     | TCP      |        |        | FORWARD     |
+| MGMT    | MGMT        | enp6s18 | 10.0.1.0/24    | WG-Client-F    |                | enp6s18 | TCP      |        |        | INPUT       |
+
+```bash
+PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o <public-interface> -j MASQUERADE;
+PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o <public-interface> -j MASQUERADE;
+```
 
 #### Wireguard Client on Gameserver (on VM level):
-| Service | Source CN   | SOURCE_IP      | Destination CN | DESTINATION_IP | PROTOCOL | S_PORT | D_PORT | Chain       |
-| --------| ----------- | -------------- | -------------- | -------------- | -------- | ------ | ------ | ----------- |
-| VPN     | WG-Client-G |                | VPS            | 152.89.105.252 | UDP      | 51820  | 51820  | POSTROUTING |
-| VPN     | WG-Client-G |                | GSVM           | 10.0.30.0/24   | TCP      |        |        | OUTPUT      |
-| MGMT    | WG-Client-G |                | MGMT           | 10.0.1.0/24    | TCP      |        |        | OUTPUT      |
-| VPN     | VPS         | 152.89.105.252 | WG-Client-G    |                | UDP      | 51820  | 51820  | POSTROUTING |
-| VPN     | GSVM        | 10.0.30.0/24   | WG-Client-G    |                | TCP      |        |        | INPUT       |
-| MGMT    | MGMT        | 10.0.1.0/24    | WG-Client-G    |                | TCP      |        |        | INPUT       |
+| Service | Source CN   | S_IF    | SOURCE_IP      | Destination CN | DESTINATION_IP | D_IF    | PROTOCOL | S_PORT | D_PORT | Chain       |
+|---------|-------------|---------|----------------|----------------|----------------|---------|----------|--------|--------|-------------|
+| VPN     | WG-Client-G | wg0     |                | VPS            | 152.89.105.252 | wg0     | UDP      | 51820  | 51820  | POSTROUTING |
+| VPN     | WG-Client-G | wg0     |                | GSVM           | 10.0.30.0/24   | enp6s18 | TCP      |        |        | FORWARD     |
+| MGMT    | WG-Client-G | enp6s18 |                | MGMT           | 10.0.1.0/24    | enp6s18 | TCP      |        |        | OUTPUT      |
+| VPN     | VPS         | wg0     | 152.89.105.252 | WG-Client-G    |                | wg0     | UDP      | 51820  | 51820  | POSTROUTING |
+| VPN     | GSVM        | enp6s18 | 10.0.30.0/24   | WG-Client-G    |                | enp6s18 | TCP      |        |        | FORWARD     |
+| MGMT    | MGMT        | enp6s18 | 10.0.1.0/24    | WG-Client-G    |                | enp6s18 | TCP      |        |        | INPUT       |
+
 
 #### VMs on Fileserver (in PVE GUI):
 | Service | Source CN   | SOURCE_IP   | Destination CN | DESTINATION_IP | PROTOCOL | S_PORT | D_PORT | Chain  |
@@ -158,6 +173,7 @@ sudo apt install iptables-persistent
 echo 1 > /proc/sys/net/ipv4/ip_forward
 sudo nano /etc/iptables/rules.v4
 ```
+
 
 
 
