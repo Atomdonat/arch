@@ -1,132 +1,155 @@
+## Roadmap to success?!/ToDo-List
+- [ ] setup working tunnel between clients on one VM per server and server on VPS
+	- [x] WG-Server-VPS working
+	- [ ] WG-Client-Fileserver working
+	- [x] WG-Client-Gameserver working
+- [ ] get traffic from VM's (10.0.30.0/24 & 10.0.40.0/24) routed to VPS 
+	- [ ] Route traffic between WG Server and WG Clients
+	- [ ] Login/Auth/Landing page on VPS to limit access
+	- [ ] setup ip routes on VPS and MASQUERADE 
+	  - [ ] `post-up ip route add 10.0.30.0/24 via 10.0.20.30`
+	  - [ ] `post-up ip route add 10.0.40.0/24 via 10.0.20.40`
+	  - [ ] iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+	- [ ] setup ICMP allowance on WGS and WGC 
+	  - [ ] `sudo iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT` 
+	    - [ ] WGS
+	    - [ ] WGCF
+	    - [ ] WGCF
+	  - [ ] `sudo iptables -A OUTPUT -p icmp --icmp-type echo-reply -j ACCEPT`
+	    - [ ] WGS
+	    - [ ] WGCF
+	    - [ ] WGCF
+	- [ ] ping possible (on vps: `ping 10.0.30.160`)
+	set
+	- [ ] VM traffic from/to WG-Client-Fileserver correct
+	- [ ] VM traffic from/to WG-Client-Gameserver correct
+- [ ] setup Nginx Reverse Proxy on VPS
+	- [ ] working on WG-Server-VPS 
+	- [ ] working on WG-Client-Fileserver
+	- [ ] working on WG-Client-Gameserver
+
 ![Network Layout](./Networklayout_detailed.svg "Network Layout")
 ## pre-configuration
-- install iptables: `sudo apt install iptables iutils-ping`
+- install iptables: `sudo apt install iptables iputils-ping`
 - enable IP-forwarding: `echo 1 > /proc/sys/net/ipv4/ip_forward`
 - get current config: `iptables -filter -L`
-
-### Reverse Proxy
+## Wireguard Setup
+### WG-Server:
+- `sudo apt install wireguard`
+- `sudo sysctl -w net.ipv4.ip_forward=1`
+- `ip link show` -> \<public-interface\> 
+- `wg genkey | tee privatekey | wg pubkey > publickey`
+- `sudo nano /etc/wireguard/wg0.conf`
+	```
+	[Interface]
+	PrivateKey=<server-private-key>
+	Address=<server-ip-address>/<subnet>
+	SaveConfig=true
+	PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o <public-interface> -j MASQUERADE;
+	PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o <public-interface> -j MASQUERADE;
+	ListenPort = 51820
+	```
+- (setup client)
+- `sudo wg set wg0 peer <client-public-key> allowed-ips <client-ip-address>/32`
+- `wg-quick up wg0`
+- `ping <client-ip-address>` -> working Tunnel
+- `ping 8.8.8.8` -> forwarding works
+### WG-Client-Fileserver:
+- `sudo apt install wireguard`
+- `sudo sysctl -w net.ipv4.ip_forward=1`
+- `wg genkey | tee privatekey | wg pubkey > publickey`
+- `sudo nano /etc/wireguard/wg0.conf`
+	```
+	[Interface]
+	PrivateKey = <client-private-key>
+	Address = <client-ip-address>/<subnet>
+	SaveConfig = true
+	
+	[Peer]
+	PublicKey = <server-public-key>
+	Endpoint = <server-public-ip-address>:51820
+	AllowedIPs = 0.0.0.0/0
+	PersistentKeepalive=25
+	```
+- `wg-quick up wg0`
+- `ping <server-ip-address>` -> working Tunnel
+- `ping 8.8.8.8` -> forwarding works
+### nginx Reverse Proxy
 | Public IP/Ports          | <-> | I/F  | local IP  | I/F | <-> | I/F | local IP  | I/F     | <-> | I/F | local IP        |
 |--------------------------|:---:|------|-----------|-----|:---:|-----|-----------|---------|:---:|-----|-----------------|
 | 152.89.105.252:9000-9099 | <-> | ens3 | 10.0.20.1 | wg0 | <-> | wg0 | 10.0.20.2 | enp6s18 | <-> | ??? | 10.0.40.XXX:YYY |
 | 152.89.105.252:9100-9199 | <-> | ens3 | 10.0.20.1 | wg0 | <-> | wg0 | 10.0.20.3 | enp6s18 | <-> | ??? | 10.0.30.XXX:YYY |
 
+## mistakes:
+times locked out: 4
+system fuck ups: 3 
 
-### Wireguard
-#### Server on VPS:
-```bash
-atomdonat@gnfproxy:~$ sudo wg
-interface: wg0
-  public key: 0wXbJyU3Sqf2tMk0qZsnwggwHjv8EHm+q/zKaQAOzEY=
-  private key: (hidden)
-  listening port: 51820
-
-peer: VhyJeBNnKpDRjVCt3GP7dh+OSRsWfKwmQ2utK8kdBDE=
-  endpoint: 134.147.24.39:36906
-  allowed ips: 10.0.20.2/32
-
-peer: AUik3EsHsaIk3NJLYkI+gONW2FmNtzgKLUQJodizOko=
-  endpoint: 134.147.24.39:40381
-  allowed ips: 10.0.20.3/32
-```
-#### Client on WGCG:
-```bash
-simon@wg-client-g:~$ sudo wg
-interface: wg0
-  public key: AUik3EsHsaIk3NJLYkI+gONW2FmNtzgKLUQJodizOko=
-  private key: (hidden)
-  listening port: 40381
-  fwmark: 0xca6c
-
-peer: 0wXbJyU3Sqf2tMk0qZsnwggwHjv8EHm+q/zKaQAOzEY=
-  endpoint: 152.89.105.252:51820
-  allowed ips: 10.0.20.0/24, 10.0.30.0/24
-  latest handshake: 1 minute, 15 seconds ago
-  transfer: 276 B received, 924 B sent
-  persistent keepalive: every 25 seconds
-```
-#### Client on WGCF:
-```bash
-user@wireguard-client:~$ sudo wg
-interface: wg0
-  public key: VhyJeBNnKpDRjVCt3GP7dh+OSRsWfKwmQ2utK8kdBDE=
-  private key: (hidden)
-  listening port: 36906
-
-peer: 0wXbJyU3Sqf2tMk0qZsnwggwHjv8EHm+q/zKaQAOzEY=
-  endpoint: 152.89.105.252:51820
-  allowed ips: 10.0.40.0/24, 10.0.20.0/24
-  latest handshake: 2 seconds ago
-  transfer: 92 B received, 180 B sent
-  persistent keepalive: every 25 seconds
-```
-## Firewall Configuration
+## Proxy Configuration
 ### VM Level Layout:
 #### VPS:
 | Service   | Incoming Interface | Outgoing Interface |
 |-----------|--------------------|--------------------|
 | MGMT      | ens3               | ens3               |
 | Webserver | ens3               | ens3               |
-| VPN in    | ens3               | wg0                |
-| VPN out   | wg0                | ens3               |
+| VPN       | ens3               | wg0                |
+|           | wg0                | ens3               |
 #### WGCF:
 | Service | Incoming Interface | Outgoing Interface |
 |---------|--------------------|--------------------|
-| MGMT    | new Interface      | new Interface      |
+| MGMT    | enp6s18            | enp6s18            |
 | VPN in  | enp6s18            | wg0                |
 | VPN out | wg0                | enp6s18            |
 #### WGCG:
 | Service | Incoming Interface | Outgoing Interface |
 |---------|--------------------|--------------------|
-| MGMT    | new Interface      | new Interface      |
+| MGMT    | enp6s18            | enp6s18            |
 | VPN in  | enp6s18            | wg0                |
 | VPN out | wg0                | enp6s18            |
 #### VM:
-
+| Service | Incoming Interface | Outgoing Interface |
+|---------|--------------------|--------------------|
+| Any     | enp6s18            | enp6s18            |
  
 ### Routing Tables:
 #### VPS (on VM level):
+##### VPN:
 | Service   | Source CN   | S_IF | SOURCE_IP | Destination CN | DESTINATION_IP | D_IF | PROTOCOL | S_PORT | D_PORT | Chain       |
 |-----------|-------------|------|-----------|----------------|----------------|------|----------|--------|--------|-------------|
-| MGMT      | VPS         | ens3 |           | MGMT           | 0.0.0.0/0      | ens3 | TCP      | 22     | 22     | OUTPUT      |
-| Webserver | VPS         | ens3 |           | User           | 0.0.0.0/0      | ens3 | TCP      | 80     |        | OUTPUT      |
-| Webserver | VPS         | ens3 |           | User           | 0.0.0.0/0      | ens3 | TCP      | 443    |        | OUTPUT      |
-| DNS       | VPS         | ens3 |           | CF-DNS         | 8.8.8.8        | ens3 | UDP      | 53     |        | OUTPUT      |
-| VPN       | VPS         | wg0  |           | User           | 0.0.0.0/0      | ens3 | UDP      | 51820  |        | OUTPUT      |
-| VPN       | VPS         | wg0  |           | WG-Client-F    | 10.0.20.2      | wg0  | UDP      | 51820  | 51820  | POSTROUTING |
-| VPN       | VPS         | wg0  |           | WG-Client-G    | 10.0.20.3      | wg0  | UDP      | 51820  | 51820  | POSTROUTING |
+| VPN       | User        | ens3 | 0.0.0.0/0 | VPS            |                | wg0  | UDP      |        | 51820  | FORWARD     |
+| VPN       | VPS         | wg0  |           | User           | 0.0.0.0/0      | ens3 | UDP      | 51820  |        | FORWARD     |
+| VPN       | VPS         | wg0  |           | WG-Client-F    | 10.0.20.2      | wg0  | UDP      | 51820  | 36906  | POSTROUTING |
+| VPN       | WG-Client-F | wg0  | 10.0.20.2 | VPS            |                | wg0  | UDP      | 36906  | 51820  | POSTROUTING |
+##### VPS:
+| Service   | Source CN   | S_IF | SOURCE_IP | Destination CN | DESTINATION_IP | D_IF | PROTOCOL | S_PORT | D_PORT | Chain       |
+|-----------|-------------|------|-----------|----------------|----------------|------|----------|--------|--------|-------------|
 | MGMT      | MGMT        | ens3 | 0.0.0.0/0 | VPS            |                | ens3 | TCP      | 22     | 22     | INPUT       |
 | Webserver | User        | ens3 | 0.0.0.0/0 | VPS            |                | ens3 | TCP      |        | 80     | INPUT       |
 | Webserver | User        | ens3 | 0.0.0.0/0 | VPS            |                | ens3 | TCP      |        | 443    | INPUT       |
 | DNS       | CF-DNS      | ens3 | 8.8.8.8   | VPS            |                | ens3 | UDP      |        | 53     | INPUT       |
-| VPN       | User        | ens3 | 0.0.0.0/0 | VPS            |                | wg0  | UDP      |        | 51820  | INPUT       |
-| VPN       | WG-Client-F | wg0  | 10.0.20.2 | VPS            |                | wg0  | UDP      | 51820  | 51820  | POSTROUTING |
-| VPN       | WG-Client-G | wg0  | 10.0.20.3 | VPS            |                | wg0  | UDP      | 51820  | 51820  | POSTROUTING |
-
+| MGMT      | VPS         | ens3 |           | MGMT           | 0.0.0.0/0      | ens3 | TCP      | 22     | 22     | OUTPUT      |
+| Webserver | VPS         | ens3 |           | User           | 0.0.0.0/0      | ens3 | TCP      | 80     |        | OUTPUT      |
+| Webserver | VPS         | ens3 |           | User           | 0.0.0.0/0      | ens3 | TCP      | 443    |        | OUTPUT      |
+| DNS       | VPS         | ens3 |           | CF-DNS         | 8.8.8.8        | ens3 | UDP      | 53     |        | OUTPUT      |
 
 #### Wireguard Client on Fileserver (on VM level): 
 | Service | Source CN   | S_IF    | SOURCE_IP      | Destination CN | DESTINATION_IP | D_IF    | PROTOCOL | S_PORT | D_PORT | Chain       |
 | --------| ----------- |---------| -------------- | -------------- | -------------- |---------| -------- | ------ | ------ | ----------- |
-| VPN     | WG-Client-F | wg0     |                | VPS            | 152.89.105.252 | wg0     | UDP      | 51820  | 51820  | POSTROUTING |
-| VPN     | WG-Client-F | wg0     |                | FSVM           | 10.0.40.0/24   | enp6s18 | TCP      |        |        | FORWARD     |
-| MGMT    | WG-Client-F | enp6s18 |                | MGMT           | 10.0.1.0/24    | enp6s18 | TCP      |        |        | OUTPUT      |
-| VPN     | VPS         | wg0     | 152.89.105.252 | WG-Client-F    |                | wg0     | UDP      | 51820  | 51820  | POSTROUTING |
-| VPN     | FSVM        | enp6s18 | 10.0.40.0/24   | WG-Client-F    |                | wg0     | TCP      |        |        | FORWARD     |
 | MGMT    | MGMT        | enp6s18 | 10.0.1.0/24    | WG-Client-F    |                | enp6s18 | TCP      |        |        | INPUT       |
-
-```bash
-PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o <public-interface> -j MASQUERADE;
-PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o <public-interface> -j MASQUERADE;
-```
+| VPN     | WG-Client-F | wg0     |                | FSVM           | 10.0.40.0/24   | enp6s18 | TCP      |        |        | FORWARD     |
+| VPN     | FSVM        | enp6s18 | 10.0.40.0/24   | WG-Client-F    |                | wg0     | TCP      |        |        | FORWARD     |
+| MGMT    | WG-Client-F | enp6s18 |                | MGMT           | 10.0.1.0/24    | enp6s18 | TCP      |        |        | OUTPUT      |
+| VPN     | WG-Client-F | wg0     |                | VPS            | 152.89.105.252 | wg0     | UDP      | 51820  | 51820  | POSTROUTING |
+| VPN     | VPS         | wg0     | 152.89.105.252 | WG-Client-F    |                | wg0     | UDP      | 51820  | 51820  | POSTROUTING |
 
 #### Wireguard Client on Gameserver (on VM level):
 | Service | Source CN   | S_IF    | SOURCE_IP      | Destination CN | DESTINATION_IP | D_IF    | PROTOCOL | S_PORT | D_PORT | Chain       |
 |---------|-------------|---------|----------------|----------------|----------------|---------|----------|--------|--------|-------------|
-| VPN     | WG-Client-G | wg0     |                | VPS            | 152.89.105.252 | wg0     | UDP      | 51820  | 51820  | POSTROUTING |
+| MGMT    | MGMT        | enp6s18 | 10.0.1.0/24    | WG-Client-G    |                | enp6s18 | TCP      |        |        | INPUT       |
 | VPN     | WG-Client-G | wg0     |                | GSVM           | 10.0.30.0/24   | enp6s18 | TCP      |        |        | FORWARD     |
+| VPN     | GSVM        | enp6s18 | 10.0.30.0/24   | WG-Client-G    |                | enp6s18 | TCP      |        |        | FORWARD     |
 | MGMT    | WG-Client-G | enp6s18 |                | MGMT           | 10.0.1.0/24    | enp6s18 | TCP      |        |        | OUTPUT      |
 | VPN     | VPS         | wg0     | 152.89.105.252 | WG-Client-G    |                | wg0     | UDP      | 51820  | 51820  | POSTROUTING |
-| VPN     | GSVM        | enp6s18 | 10.0.30.0/24   | WG-Client-G    |                | enp6s18 | TCP      |        |        | FORWARD     |
-| MGMT    | MGMT        | enp6s18 | 10.0.1.0/24    | WG-Client-G    |                | enp6s18 | TCP      |        |        | INPUT       |
+| VPN     | WG-Client-G | wg0     |                | VPS            | 152.89.105.252 | wg0     | UDP      | 51820  | 51820  | POSTROUTING |
 
 
 #### VMs on Fileserver (in PVE GUI):
@@ -155,6 +178,10 @@ PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING 
 ```bash
 sudo iptables -A INPUT -s $SOURCE_IP -d $DESTINATION_IP -p $PROTOCOL --sport $S_PORT --dport $D_PORT -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
 ```
+#### FORWARD:
+```bash
+sudo iptables -A FORWARD -s $SOURCE_IP -d $DESTINATION_IP -p $PROTOCOL --sport $S_PORT --dport $D_PORT -j ACCEPT
+```
 #### OUTPUT:
 ```bash
 sudo iptables  -A OUTPUT -s $SOURCE_IP -d $DESTINATION_IP -p $PROTOCOL --sport $S_PORT --dport $D_PORT -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
@@ -173,6 +200,24 @@ sudo apt install iptables-persistent
 echo 1 > /proc/sys/net/ipv4/ip_forward
 sudo nano /etc/iptables/rules.v4
 ```
+
+#### VPS:
+```bash
+
+```
+#### WGCF:
+```bash
+
+
+```
+#### WGCG:
+```bash
+
+
+```
+
+
+
 
 
 
@@ -196,7 +241,7 @@ sudo nano /etc/iptables/rules.v4
 #### General:
 - `sudo iptables -t nat -A PREROUTING -p $PROTOCOL -s $SOURCE_IP --dport $S_PORT -j DNAT --to-destination $DESTINATION_IP:$D_PORT`
 - `sudo iptables -t nat -A POSTROUTING -p $PROTOCOL -d $DESTINATION_IP --dport $D_PORT -j MASQUERADE`
-#### VMS:
+#### VM's:
 - default Policy:
 	- `sudo iptables -P INPUT DROP`
 	- `sudo iptables -P OUTPUT ACCEPT`
@@ -256,7 +301,16 @@ sudo iptables -A FORWARD -s 152.89.105.252 -p udp --dport 51820 -d 10.0.20.3 -j 
 # Allow traffic from GSVM to WG-Client-G
 sudo iptables -A FORWARD -s 10.0.30.0/24 -p tcp --dport 80:443 -d 10.0.20.3 -j ACCEPT
 ```
-#### FORWARD:
-```bash
-sudo iptables -A FORWARD -s $SOURCE_IP -d $DESTINATION_IP -p $PROTOCOL --sport $S_PORT --dport $D_PORT -j ACCEPT
-```
+
+
+| VLAN ID |     Subnet     | Common Name |
+|---------|----------------|-------------| 
+|     1   |   10.0.1.0/24  | MGMT        |
+|    20   |  10.0.20.0/24  | Wireguard   |
+|    30   |  10.0.30.0/24  | Gameserver  |
+|    40   |  10.0.40.0/24  | Fileserver  |
+
+| Public IP:Ports           | <-> | I/F  | WG-Server IP | I/F | <-> | I/F | WG-Client IP | I/F     | <-> | I/F | VM IP           |
+|---------------------------|:---:|------|--------------|-----|:---:|-----|--------------|---------|:---:|-----|-----------------|
+| 152.XXX.XXX.XXX:9000-9099 | <-> | ens3 | 10.0.20.1    | wg0 | <-> | wg0 | 10.0.20.3    | enp6s18 | <-> | XXX | 10.0.30.XXX:XXX |
+| 152.XXX.XXX.XXX:9100-9199 | <-> | ens3 | 10.0.20.1    | wg0 | <-> | wg0 | 10.0.20.2    | enp6s18 | <-> | XXX | 10.0.40.XXX:XXX |
