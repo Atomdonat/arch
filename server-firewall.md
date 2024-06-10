@@ -7,22 +7,21 @@
 	- [ ] Route traffic between WG Server and WG Clients
 	- [ ] Login/Auth/Landing page on VPS to limit access
 	- [ ] setup ip routes on VPS and MASQUERADE 
-	  - [ ] `post-up ip route add 10.0.30.0/24 via 10.0.20.30`
-	  - [ ] `post-up ip route add 10.0.40.0/24 via 10.0.20.40`
-	  - [ ] iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+		- [ ] `post-up ip route add 10.0.30.0/24 via 10.0.20.30`
+		- [ ] `post-up ip route add 10.0.40.0/24 via 10.0.20.40`
+		- [ ] iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 	- [ ] setup ICMP allowance on WGS and WGC 
-	  - [ ] `sudo iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT` 
-	    - [ ] WGS
-	    - [ ] WGCF
-	    - [ ] WGCF
-	  - [ ] `sudo iptables -A OUTPUT -p icmp --icmp-type echo-reply -j ACCEPT`
-	    - [ ] WGS
-	    - [ ] WGCF
-	    - [ ] WGCF
+		- [ ] `sudo iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT` 
+			- [ ] WGS
+		    - [ ] WGCF
+		    - [ ] WGCF
+		- [ ] `sudo iptables -A OUTPUT -p icmp --icmp-type echo-reply -j ACCEPT`
+		    - [ ] WGS
+		    - [ ] WGCF
+		    - [ ] WGCF
 	- [ ] ping possible (on vps: `ping 10.0.30.160`)
-	set
-	- [ ] VM traffic from/to WG-Client-Fileserver correct
-	- [ ] VM traffic from/to WG-Client-Gameserver correct
+		- [ ] VM traffic from/to WG-Client-Fileserver correct
+		- [ ] VM traffic from/to WG-Client-Gameserver correct
 - [ ] setup Nginx Reverse Proxy on VPS
 	- [ ] working on WG-Server-VPS 
 	- [ ] working on WG-Client-Fileserver
