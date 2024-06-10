@@ -4,21 +4,12 @@
 	- [ ] WG-Client-Fileserver working
 	- [x] WG-Client-Gameserver working
 - [ ] get traffic from VM's (10.0.30.0/24 & 10.0.40.0/24) routed to VPS 
-	- [ ] Route traffic between WG Server and WG Clients
+	- [x] Route traffic between WG Server and WG Clients
 	- [ ] Login/Auth/Landing page on VPS to limit access
-	- [ ] setup ip routes on VPS and MASQUERADE 
-		- [ ] `post-up ip route add 10.0.30.0/24 via 10.0.20.30`
-		- [ ] `post-up ip route add 10.0.40.0/24 via 10.0.20.40`
-		- [ ] iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-	- [ ] setup ICMP allowance on WGS and WGC 
-		- [ ] `sudo iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT` 
-			- [ ] WGS
-		    - [ ] WGCF
-		    - [ ] WGCF
-		- [ ] `sudo iptables -A OUTPUT -p icmp --icmp-type echo-reply -j ACCEPT`
-		    - [ ] WGS
-		    - [ ] WGCF
-		    - [ ] WGCF
+	- [x] setup ip routes on VPS and MASQUERADE 
+		- [x] `post-up ip route add 10.0.30.0/24 via 10.0.20.30`
+		- [x] `post-up ip route add 10.0.40.0/24 via 10.0.20.40`
+		- [x] `iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE` (default by wireguard)
 	- [ ] ping possible (on vps: `ping 10.0.30.160`)
 		- [ ] VM traffic from/to WG-Client-Fileserver correct
 		- [ ] VM traffic from/to WG-Client-Gameserver correct
@@ -73,7 +64,9 @@
 - `wg-quick up wg0`
 - `ping <server-ip-address>` -> working Tunnel
 - `ping 8.8.8.8` -> forwarding works
-### nginx Reverse Proxy
+### Troubleshooting
+[![](https://mermaid.ink/img/pako:eNpdks1ugzAQhF9l5UsvARKpJ6RWakJ-Lj21N6gqyzZgATY1dlGU5N27wKpVasnWzux3mLV9YcJKxVJWtnYUNXce3rPCAK6XvNemAmnVYB48jNY1H0tnmwvuIemdFclwHhKjfKL770c8PkvrRu4kkVk-BGkBIeFbiEZANJ7Q-A992hC8W-CxIr3Pxyr6Clo0EHq01-Qf8sHrtgVjl1SYkjrHXLgz1Sei_uWn2SCKnmFL48ziChvch3trjZuuI5st6h9msaPcBGvjlSu5UOkUNo5j9E73CEaup0u9wp5mnBtEnWZxXARbsU65jmuJr3OZvIL5WnWqYCmWkrumYIW5IceDt29nI1jqXVAr5myoapaWvB1QhV5yrzLNK8e7X1dJ7a17XR5__gO3H7Vunws?type=png)](https://mermaid.live/edit#pako:eNpdks1ugzAQhF9l5UsvARKpJ6RWakJ-Lj21N6gqyzZgATY1dlGU5N27wKpVasnWzux3mLV9YcJKxVJWtnYUNXce3rPCAK6XvNemAmnVYB48jNY1H0tnmwvuIemdFclwHhKjfKL770c8PkvrRu4kkVk-BGkBIeFbiEZANJ7Q-A992hC8W-CxIr3Pxyr6Clo0EHq01-Qf8sHrtgVjl1SYkjrHXLgz1Sei_uWn2SCKnmFL48ziChvch3trjZuuI5st6h9msaPcBGvjlSu5UOkUNo5j9E73CEaup0u9wp5mnBtEnWZxXARbsU65jmuJr3OZvIL5WnWqYCmWkrumYIW5IceDt29nI1jqXVAr5myoapaWvB1QhV5yrzLNK8e7X1dJ7a17XR5__gO3H7Vunws)
+## nginx Reverse Proxy
 | Public IP/Ports          | <-> | I/F  | local IP  | I/F | <-> | I/F | local IP  | I/F     | <-> | I/F | local IP        |
 |--------------------------|:---:|------|-----------|-----|:---:|-----|-----------|---------|:---:|-----|-----------------|
 | 152.89.105.252:9000-9099 | <-> | ens3 | 10.0.20.1 | wg0 | <-> | wg0 | 10.0.20.2 | enp6s18 | <-> | ??? | 10.0.40.XXX:YYY |
@@ -301,6 +294,30 @@ sudo iptables -A FORWARD -s 152.89.105.252 -p udp --dport 51820 -d 10.0.20.3 -j 
 sudo iptables -A FORWARD -s 10.0.30.0/24 -p tcp --dport 80:443 -d 10.0.20.3 -j ACCEPT
 ```
 
+
+## Mermaid Graphs
+### Ping not working
+```
+flowchart TD
+    A[ping doesn't work]
+    B[cat /proc/sys/net/ipv4/ip_forward]
+    D[sudo sysctl -w net.ipv4.ip_forward=1]
+    C[sudo wg]
+    E[wg-quick up wg0]
+    F[still not working]
+    G[cry]
+    H[still doesn't work]
+
+    A --> B
+    B --> | 1 | F
+    B --> | 0 | D
+    D --> F
+    F --> C
+    C --> | interface: wg0... | H
+    C --> | nothing | E
+    E --> H
+    H --> G
+```
 
 | VLAN ID |     Subnet     | Common Name |
 |---------|----------------|-------------| 
